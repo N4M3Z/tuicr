@@ -296,6 +296,8 @@ fn main() -> anyhow::Result<()> {
         app.clear_expired_message();
         app.poll_pr_load_events();
         app.poll_pr_open_events();
+        app.poll_pr_reload_events();
+        app.poll_pr_threads_events();
 
         // Render
         terminal.draw(|frame| {
@@ -387,7 +389,11 @@ fn main() -> anyhow::Result<()> {
                         pending_d = false;
                         if key.code == crossterm::event::KeyCode::Char('d') {
                             if !app.delete_comment_at_cursor() {
-                                app.set_message("No comment at cursor");
+                                if app.cursor_on_remote_thread() {
+                                    app.set_message("GitHub comment — read only in tuicr");
+                                } else {
+                                    app.set_message("No comment at cursor");
+                                }
                             }
                             continue;
                         }

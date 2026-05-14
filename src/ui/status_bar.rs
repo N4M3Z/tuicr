@@ -261,13 +261,45 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw("")
         };
 
-        vec![mode_span, hints_span, dirty_indicator]
+        // Inline hint while remote review threads are still loading in PR
+        // mode. The diff is already visible; this just tells the user that
+        // existing GitHub discussions are still on the way.
+        let remote_loading = if app.forge_review_threads_loading {
+            Span::styled(
+                " Loading remote comments… ",
+                Style::default().fg(theme.fg_dim),
+            )
+        } else {
+            Span::raw("")
+        };
+
+        vec![mode_span, hints_span, dirty_indicator, remote_loading]
     };
 
-    // Build message span and create right-aligned layout
-    let (message_span, message_width) = build_message_span(app.message.as_ref(), theme);
+    // Right-aligned slot: while `:e` is in flight we put the spinner
+    // there instead of any pending message, mirroring how messages are
+    // placed. The user sees one prominent right-aligned indicator at a
+    // time. After the reload lands, the success message takes the slot
+    // back.
+    let (right_span, right_width) = if let Some(reload) = app.pr_reload_state.as_ref() {
+        let glyph = crate::ui::selector::pr_open_spinner_glyph(reload.started_at.elapsed());
+        let content = format!(" {glyph} Reloading PR… ");
+        let width = content.len();
+        (
+            Span::styled(
+                content,
+                Style::default()
+                    .fg(theme.message_info_fg)
+                    .bg(theme.message_info_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            width,
+        )
+    } else {
+        build_message_span(app.message.as_ref(), theme)
+    };
     let total_width = area.width as usize;
-    let spans = build_right_aligned_spans(left_spans, message_span, message_width, total_width);
+    let spans = build_right_aligned_spans(left_spans, right_span, right_width, total_width);
 
     let line = Line::from(spans);
 

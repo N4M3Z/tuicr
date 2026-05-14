@@ -183,6 +183,7 @@ fn handle_export(app: &mut App) {
             &app.diff_source,
             &app.comment_types,
             app.export_legend,
+            &app.forge_review_threads,
         ) {
             Ok(content) => {
                 app.pending_stdout_output = Some(content);
@@ -196,6 +197,7 @@ fn handle_export(app: &mut App) {
             &app.diff_source,
             &app.comment_types,
             app.export_legend,
+            &app.forge_review_threads,
         ) {
             Ok(msg) => app.set_message(msg),
             Err(e) => app.set_warning(format!("{e}")),
@@ -361,15 +363,11 @@ pub fn handle_command_action(app: &mut App, action: Action) {
                 },
                 "e" | "reload" => {
                     if matches!(app.diff_source, app::DiffSource::PullRequest(_)) {
-                        match app.reload_pull_request() {
-                            Ok(true) => {
-                                app.set_message(
-                                    "Reloaded PR at new head — switched to fresh session"
-                                        .to_string(),
-                                );
-                            }
-                            Ok(false) => app.set_message("PR is already at the latest head"),
-                            Err(e) => app.set_error(format!("Reload failed: {e}")),
+                        // Async: shows a spinner in the status bar; result
+                        // is applied in `poll_pr_reload_events` and the
+                        // cursor is restored to the captured anchor.
+                        if let Err(e) = app.spawn_pr_reload() {
+                            app.set_error(format!("Reload failed: {e}"));
                         }
                     } else {
                         match app.reload_diff_files() {
@@ -453,6 +451,26 @@ pub fn handle_command_action(app: &mut App, action: Action) {
                         app.set_error(format!("Failed to open PR selector: {e}"));
                     } else {
                         return;
+                    }
+                }
+                "comments unresolved" | "comments all" | "comments hide" => {
+                    use crate::forge::remote_comments::PrCommentsVisibility;
+                    if !matches!(app.diff_source, app::DiffSource::PullRequest(_)) {
+                        app.set_warning(":comments only applies in PR mode");
+                    } else {
+                        let new_visibility = match cmd.as_str() {
+                            "comments unresolved" => PrCommentsVisibility::Unresolved,
+                            "comments all" => PrCommentsVisibility::All,
+                            "comments hide" => PrCommentsVisibility::Hide,
+                            _ => unreachable!(),
+                        };
+                        let changed = app.set_remote_comments_visibility(new_visibility);
+                        let label = new_visibility.label();
+                        if changed {
+                            app.set_message(format!("Remote comments: {label}"));
+                        } else {
+                            app.set_message(format!("Remote comments: already {label}"));
+                        }
                     }
                 }
                 _ => app.set_message(format!("Unknown command: {cmd}")),
@@ -559,6 +577,7 @@ pub fn handle_confirm_action(app: &mut App, action: Action) {
                         &app.diff_source,
                         &app.comment_types,
                         app.export_legend,
+                        &app.forge_review_threads,
                     ) {
                         Ok(content) => app.pending_stdout_output = Some(content),
                         Err(e) => app.set_warning(format!("{e}")),
@@ -569,6 +588,7 @@ pub fn handle_confirm_action(app: &mut App, action: Action) {
                         &app.diff_source,
                         &app.comment_types,
                         app.export_legend,
+                        &app.forge_review_threads,
                     ) {
                         Ok(msg) => app.set_message(msg),
                         Err(e) => app.set_warning(format!("{e}")),
@@ -898,7 +918,11 @@ fn handle_shared_normal_action(app: &mut App, action: Action) {
         }
         Action::AddFileComment => app.enter_comment_mode(true, None),
         Action::EditComment if !app.enter_edit_mode() => {
-            app.set_message("No comment at cursor");
+            if app.cursor_on_remote_thread() {
+                app.set_message("GitHub comment — read only in tuicr");
+            } else {
+                app.set_message("No comment at cursor");
+            }
         }
         Action::ExportToClipboard => handle_export(app),
         Action::SearchNext => {
