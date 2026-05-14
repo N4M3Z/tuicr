@@ -16,8 +16,25 @@ REPO="agavra/tuicr"
 BIN="tuicr"
 INSTALL_DIR="${TUICR_INSTALL_DIR:-$HOME/.local/bin}"
 
+# Color setup: only emit escapes when stdout is a tty and NO_COLOR is unset
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    BOLD=$(printf '\033[1m')
+    RED=$(printf '\033[31m')
+    GREEN=$(printf '\033[32m')
+    YELLOW=$(printf '\033[33m')
+    CYAN=$(printf '\033[36m')
+    RESET=$(printf '\033[0m')
+else
+    BOLD=""
+    RED=""
+    GREEN=""
+    YELLOW=""
+    CYAN=""
+    RESET=""
+fi
+
 err() {
-    printf 'Error: %s\n' "$1" >&2
+    printf '%sError:%s %s\n' "$RED$BOLD" "$RESET" "$1" >&2
     exit 1
 }
 
@@ -103,15 +120,15 @@ URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ARCHIVE}"
 
 # Show install plan and confirm
 info ""
-info "About to install:"
-info "  Package:  $BIN $VERSION"
+info "${BOLD}About to install:${RESET}"
+info "  Package:  $BIN ${CYAN}$VERSION${RESET}"
 info "  Target:   $TARGET"
 info "  Source:   $URL"
 info "  Dest:     $INSTALL_DIR/$BIN"
 info ""
 
 if [ -z "$TUICR_INSTALL_YES" ] && [ -r /dev/tty ]; then
-    printf "Continue? [Y/n] "
+    printf '%sContinue? [Y/n]%s ' "$BOLD" "$RESET"
     read -r answer </dev/tty
     case "$answer" in
         ""|y|Y|yes|YES|Yes) ;;
@@ -147,14 +164,14 @@ mv "$SRC" "$DEST"
 chmod +x "$DEST"
 
 info ""
-info "Installed $BIN $VERSION to $DEST"
+info "${GREEN}Installed${RESET} $BIN ${CYAN}$VERSION${RESET} to $DEST"
 
 # Check PATH
 case ":$PATH:" in
     *":$INSTALL_DIR:"*) ;;
     *)
         info ""
-        info "Note: $INSTALL_DIR is not on your PATH."
+        info "${YELLOW}Note: $INSTALL_DIR is not on your PATH.${RESET}"
         info "Add this to your shell profile (.bashrc, .zshrc, etc):"
         info ""
         info "    export PATH=\"$INSTALL_DIR:\$PATH\""
