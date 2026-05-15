@@ -663,6 +663,39 @@
     }
     .inst code .copy-hint.ok { color: var(--green); }
 
+    /* ── SPONSORS ───────────────────────────────────────── */
+    .sponsors-band {
+      margin: 18px 0 0;
+      padding: 14px 0;
+      display: flex; align-items: center; justify-content: center;
+      gap: 18px; flex-wrap: wrap;
+      border-top: 1px dashed var(--line);
+      border-bottom: 1px dashed var(--line);
+    }
+    .sponsors-band .label {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--fg-mute);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .sponsors-band .label::before { content: "// "; }
+    .sponsor {
+      display: inline-flex; align-items: center;
+      opacity: .85; transition: opacity .15s;
+    }
+    .sponsor:hover { opacity: 1; }
+    .sponsor-logo { height: 26px; width: auto; display: block; }
+    .sponsor-dark { display: none; }
+    html[data-theme="tokyo"] .sponsor-light,
+    html[data-theme="mocha"] .sponsor-light,
+    html[data-theme="gruvbox"] .sponsor-light,
+    html[data-theme="nord"] .sponsor-light { display: none; }
+    html[data-theme="tokyo"] .sponsor-dark,
+    html[data-theme="mocha"] .sponsor-dark,
+    html[data-theme="gruvbox"] .sponsor-dark,
+    html[data-theme="nord"] .sponsor-dark { display: block; }
+
     /* ── FOOTER ─────────────────────────────────────────── */
     footer {
       margin-top: 80px;
@@ -800,6 +833,13 @@
     <p class="demo-caption">
       live in <a href="https://github.com/agavra/tuicr">agavra/tuicr</a> · vim keybindings, GitHub-style diffs, real PR-style comments
     </p>
+    <div class="sponsors-band">
+      <span class="label">sponsored by</span>
+      <a class="sponsor" href="https://www.coderabbit.ai/" target="_blank" rel="noreferrer" aria-label="CodeRabbit">
+        <img class="sponsor-logo sponsor-light" src="coderabbit-light.svg" alt="CodeRabbit" />
+        <img class="sponsor-logo sponsor-dark" src="coderabbit-dark.svg" alt="CodeRabbit" />
+      </a>
+    </div>
   </section>
 
   <!-- ── FEATURES ────────────────────────────────────────── -->
