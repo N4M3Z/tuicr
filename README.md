@@ -71,12 +71,14 @@ Inside tuicr, navigate with `j`/`k`, press `c` to comment, then `y` to copy the 
 
 | | tuicr | [hunk](https://github.com/modem-dev/hunk) | [lumen](https://github.com/jnsahaj/lumen) | `gh pr review` | `git diff` |
 |---|:---:|:---:|:---:|:---:|:---:|
-| TUI diff viewer | ✅ | ✅ | ✅ | | |
-| Write comments in the TUI | ✅ | agent-only¹ | ✅ | | |
-| Vim keybindings | ✅ | | partial² | | |
-| Push inline review to GitHub | ✅ | | | partial³ | |
-| Agent-ready markdown export | ✅ | via CLI skill | | | |
-| git / jj / hg | ✅ / ✅ / ✅ | ✅ / ✅ / | ✅ / ✅ / | | ✅ / / |
+| TUI diff viewer | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Write comments in the TUI | ✅ | agent-only¹ | ✅ | ❌ | ❌ |
+| Vim keybindings | ✅ | ❌ | partial² | ❌ | ❌ |
+| Push inline review to GitHub | ✅ | ❌ | ❌ | partial³ | ❌ |
+| Agent-ready markdown export | ✅ | via CLI skill | ❌ | ❌ | ❌ |
+| git | ✅ | ✅ | ✅ | ❌ | ✅ |
+| jj | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Mercurial (hg) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Single static binary | ✅ | (needs Node) | ✅ | ✅ | ✅ |
 
 ¹ Hunk has a `hunk session comment add` CLI for agents to inject notes into a live TUI session.
