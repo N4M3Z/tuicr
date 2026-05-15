@@ -691,6 +691,33 @@
       table.cmp { font-size: 12px; }
       table.cmp th, table.cmp td { padding: 8px 10px; }
     }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 0 18px; }
+
+      /* nav: brand + star only */
+      .nav-links a:not(.star) { display: none; }
+
+      /* hero install: stack vertically, let cmd shrink */
+      .install-row { flex-direction: column; align-items: stretch; }
+      .cmd { min-width: 0; }
+      .cmd .body { white-space: normal; word-break: break-all; overflow: visible; text-overflow: clip; }
+      .gh-cta { justify-content: center; }
+
+      /* hero alt-install codes wrap */
+      .install-alt code { word-break: break-all; }
+
+      /* install grid cards: allow long commands to wrap */
+      .inst code { flex-wrap: wrap; }
+      .inst code .body { white-space: normal; word-break: break-all; overflow: visible; text-overflow: clip; }
+      .inst code .copy-hint { flex-basis: 100%; text-align: right; margin-top: 4px; }
+
+      /* hero title smaller floor */
+      h1.title { font-size: clamp(40px, 11vw, 64px); }
+
+      /* compare table: scroll horizontally instead of cramping */
+      .compare-wrap { overflow-x: auto; }
+    }
   </style>
 </head>
 <body>
