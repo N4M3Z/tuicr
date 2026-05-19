@@ -4431,7 +4431,7 @@ impl App {
     fn review_comments_render_height(&self) -> usize {
         let mut height = 1; // Header line
         for comment in &self.session.review_comments {
-            height += Self::comment_display_lines(comment);
+            height += Self::comment_display_lines(comment, self.diff_state.viewport_width);
         }
         if self.input_mode == InputMode::Comment
             && self.comment_is_review_level
@@ -4458,7 +4458,8 @@ impl App {
 
         if let Some(review) = self.session.files.get(path) {
             for comment in &review.file_comments {
-                comment_lines += Self::comment_display_lines(comment);
+                comment_lines +=
+                    Self::comment_display_lines(comment, self.diff_state.viewport_width);
             }
         }
 
@@ -4504,7 +4505,10 @@ impl App {
                                 {
                                     for comment in comments {
                                         if comment.side == Some(LineSide::Old) {
-                                            comment_lines += Self::comment_display_lines(comment);
+                                            comment_lines += Self::comment_display_lines(
+                                                comment,
+                                                self.diff_state.viewport_width,
+                                            );
                                         }
                                     }
                                 }
@@ -4514,7 +4518,10 @@ impl App {
                                 {
                                     for comment in comments {
                                         if comment.side != Some(LineSide::Old) {
-                                            comment_lines += Self::comment_display_lines(comment);
+                                            comment_lines += Self::comment_display_lines(
+                                                comment,
+                                                self.diff_state.viewport_width,
+                                            );
                                         }
                                     }
                                 }
@@ -4540,8 +4547,10 @@ impl App {
                                     {
                                         for comment in comments {
                                             if comment.side != Some(LineSide::Old) {
-                                                comment_lines +=
-                                                    Self::comment_display_lines(comment);
+                                                comment_lines += Self::comment_display_lines(
+                                                    comment,
+                                                    self.diff_state.viewport_width,
+                                                );
                                             }
                                         }
                                     }
@@ -4580,7 +4589,10 @@ impl App {
                                                 for comment in comments {
                                                     if comment.side == Some(LineSide::Old) {
                                                         comment_lines +=
-                                                            Self::comment_display_lines(comment);
+                                                            Self::comment_display_lines(
+                                                                comment,
+                                                                self.diff_state.viewport_width,
+                                                            );
                                                     }
                                                 }
                                             }
@@ -4593,7 +4605,10 @@ impl App {
                                                 for comment in comments {
                                                     if comment.side != Some(LineSide::Old) {
                                                         comment_lines +=
-                                                            Self::comment_display_lines(comment);
+                                                            Self::comment_display_lines(
+                                                                comment,
+                                                                self.diff_state.viewport_width,
+                                                            );
                                                     }
                                                 }
                                             }
@@ -4612,8 +4627,10 @@ impl App {
                                     {
                                         for comment in comments {
                                             if comment.side != Some(LineSide::Old) {
-                                                comment_lines +=
-                                                    Self::comment_display_lines(comment);
+                                                comment_lines += Self::comment_display_lines(
+                                                    comment,
+                                                    self.diff_state.viewport_width,
+                                                );
                                             }
                                         }
                                     }
@@ -4705,10 +4722,29 @@ impl App {
         self.total_lines().saturating_sub(1)
     }
 
-    /// Calculate the number of display lines a comment takes (header + content + footer)
-    fn comment_display_lines(comment: &Comment) -> usize {
-        let content_lines = comment.content.split('\n').count();
-        2 + content_lines // header + content lines + footer
+    /// Calculate the number of display lines a comment takes (header + content + footer).
+    /// Uses viewport_width to account for pre-wrapped visual segments so the
+    /// annotation count stays in sync with what format_comment_lines renders.
+    pub(crate) fn comment_display_lines(comment: &Comment, viewport_width: usize) -> usize {
+        // Mirrors the content_area calculation in format_comment_lines:
+        // indicator(1) + border_prefix(7) + safety_margin(2) = 10
+        let content_area = viewport_width.saturating_sub(10);
+        let visual_lines: usize = comment
+            .content
+            .split('\n')
+            .map(|line| crate::ui::comment_panel::wrap_segments(line, content_area).len())
+            .sum();
+        2 + visual_lines // top border + visual segments + bottom border
+    }
+
+    /// Update viewport_width and trigger annotation rebuild if it changed.
+    /// Called from render functions when inner.width is computed — keeps
+    /// line_annotations.len() in sync with the rendered Vec<Line>.
+    pub fn sync_viewport_width(&mut self, new_width: usize) {
+        if self.diff_state.viewport_width != new_width {
+            self.diff_state.viewport_width = new_width;
+            self.rebuild_annotations();
+        }
     }
 
     /// Returns the source line number and side at the current cursor position, if on a diff line
@@ -7388,7 +7424,8 @@ impl App {
         self.line_annotations
             .push(AnnotatedLine::ReviewCommentsHeader);
         for (comment_idx, comment) in self.session.review_comments.iter().enumerate() {
-            let comment_lines = Self::comment_display_lines(comment);
+            let comment_lines =
+                Self::comment_display_lines(comment, self.diff_state.viewport_width);
             for _ in 0..comment_lines {
                 self.line_annotations
                     .push(AnnotatedLine::ReviewComment { comment_idx });
@@ -7410,7 +7447,8 @@ impl App {
             // File comments
             if let Some(review) = self.session.files.get(path) {
                 for (comment_idx, comment) in review.file_comments.iter().enumerate() {
-                    let comment_lines = Self::comment_display_lines(comment);
+                    let comment_lines =
+                        Self::comment_display_lines(comment, self.diff_state.viewport_width);
                     for _ in 0..comment_lines {
                         self.line_annotations.push(AnnotatedLine::FileComment {
                             file_idx,
@@ -7528,6 +7566,7 @@ impl App {
                                 path,
                                 &self.forge_review_threads,
                                 &remote_index,
+                                self.diff_state.viewport_width,
                             );
                         }
                         DiffViewMode::SideBySide => {
@@ -7540,6 +7579,7 @@ impl App {
                                 path,
                                 &self.forge_review_threads,
                                 &remote_index,
+                                self.diff_state.viewport_width,
                             );
                         }
                     }
@@ -7611,6 +7651,7 @@ impl App {
         line_no: Option<u32>,
         line_comments: &std::collections::HashMap<u32, Vec<crate::model::Comment>>,
         side: LineSide,
+        viewport_width: usize,
     ) {
         let Some(ln) = line_no else {
             return;
@@ -7628,7 +7669,7 @@ impl App {
                 continue;
             }
 
-            let comment_lines = Self::comment_display_lines(comment);
+            let comment_lines = Self::comment_display_lines(comment, viewport_width);
             for _ in 0..comment_lines {
                 annotations.push(AnnotatedLine::LineComment {
                     file_idx,
@@ -7708,6 +7749,7 @@ impl App {
         path: &std::path::Path,
         remote_threads: &[crate::forge::remote_comments::RemoteReviewThread],
         remote_index: &RemoteThreadIndex,
+        viewport_width: usize,
     ) {
         for (line_idx, diff_line) in lines.iter().enumerate() {
             annotations.push(AnnotatedLine::DiffLine {
@@ -7726,6 +7768,7 @@ impl App {
                     Some(old_ln),
                     line_comments,
                     LineSide::Old,
+                    viewport_width,
                 );
                 Self::push_remote_threads(
                     annotations,
@@ -7745,6 +7788,7 @@ impl App {
                     Some(new_ln),
                     line_comments,
                     LineSide::New,
+                    viewport_width,
                 );
                 Self::push_remote_threads(
                     annotations,
@@ -7769,6 +7813,7 @@ impl App {
         path: &std::path::Path,
         remote_threads: &[crate::forge::remote_comments::RemoteReviewThread],
         remote_index: &RemoteThreadIndex,
+        viewport_width: usize,
     ) {
         let mut i = 0;
         while i < lines.len() {
@@ -7791,6 +7836,7 @@ impl App {
                         diff_line.new_lineno,
                         line_comments,
                         LineSide::New,
+                        viewport_width,
                     );
                     if let Some(new_ln) = diff_line.new_lineno {
                         Self::push_remote_threads(
@@ -7855,6 +7901,7 @@ impl App {
                             old_lineno,
                             line_comments,
                             LineSide::Old,
+                            viewport_width,
                         );
                         if let Some(old_ln) = old_lineno {
                             Self::push_remote_threads(
@@ -7872,6 +7919,7 @@ impl App {
                             new_lineno,
                             line_comments,
                             LineSide::New,
+                            viewport_width,
                         );
                         if let Some(new_ln) = new_lineno {
                             Self::push_remote_threads(
@@ -7903,6 +7951,7 @@ impl App {
                         diff_line.new_lineno,
                         line_comments,
                         LineSide::New,
+                        viewport_width,
                     );
                     if let Some(new_ln) = diff_line.new_lineno {
                         Self::push_remote_threads(

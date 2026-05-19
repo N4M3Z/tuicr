@@ -32,6 +32,7 @@ struct SideBySideContext<'a> {
     app: &'a App,
     theme: &'a Theme,
     content_width: usize,
+    panel_width: usize,
     current_line_idx: usize,
     // Comment input state for inline editing
     comment_input_mode: bool,
@@ -83,6 +84,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
         app,
         theme: &app.theme,
         content_width,
+        panel_width: inner.width as usize,
         current_line_idx: app.diff_state.cursor_line,
         comment_input_mode,
         comment_line: app.comment_line,
@@ -138,12 +140,13 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
                 None,
                 true,
                 app.supports_keyboard_enhancement,
+                ctx.panel_width.saturating_sub(1),
             );
             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
             comment_cursor_column = 1 + cursor_info.column;
             comment_input_box_range =
                 Some((line_idx, line_idx + input_lines.len().saturating_sub(1)));
-            let annotations_replaced = 2 + comment.content.split('\n').count();
+            let annotations_replaced = App::comment_display_lines(comment, inner.width as usize);
             annotation_offset = Some((line_idx, input_lines.len(), annotations_replaced));
 
             for mut input_line in input_lines {
@@ -161,6 +164,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
                 comment_type_presentation(app, &comment.comment_type),
                 &comment.content,
                 None,
+                ctx.panel_width.saturating_sub(1),
             );
             for mut comment_line in comment_lines {
                 let indicator = cursor_indicator(line_idx, ctx.current_line_idx);
@@ -183,6 +187,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
             None,
             false,
             app.supports_keyboard_enhancement,
+            ctx.panel_width.saturating_sub(1),
         );
         comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
         comment_cursor_column = 1 + cursor_info.column;
@@ -249,12 +254,14 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
                         None,
                         true,
                         app.supports_keyboard_enhancement,
+                        ctx.panel_width.saturating_sub(1),
                     );
                     comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
                     comment_cursor_column = 1 + cursor_info.column;
                     comment_input_box_range =
                         Some((line_idx, line_idx + input_lines.len().saturating_sub(1)));
-                    let annotations_replaced = 2 + comment.content.split('\n').count();
+                    let annotations_replaced =
+                        App::comment_display_lines(comment, inner.width as usize);
                     annotation_offset = Some((line_idx, input_lines.len(), annotations_replaced));
 
                     for mut input_line in input_lines {
@@ -275,6 +282,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
                         comment_type_presentation(app, &comment.comment_type),
                         &comment.content,
                         None,
+                        ctx.panel_width.saturating_sub(1),
                     );
                     for mut comment_line in comment_lines {
                         let indicator = cursor_indicator(line_idx, ctx.current_line_idx);
@@ -302,6 +310,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
                 None,
                 false,
                 app.supports_keyboard_enhancement,
+                ctx.panel_width.saturating_sub(1),
             );
             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
             comment_cursor_column = 1 + cursor_info.column;
@@ -610,7 +619,7 @@ pub(super) fn render_side_by_side_diff(frame: &mut Frame, app: &mut App, area: R
 
     let max_content_width = line_widths.iter().copied().max().unwrap_or(0);
 
-    app.diff_state.viewport_width = inner.width as usize;
+    app.sync_viewport_width(inner.width as usize);
     app.diff_state.max_content_width = max_content_width;
 
     let scroll_offset = app.diff_state.scroll_offset;
@@ -1279,10 +1288,11 @@ fn add_comments_to_line(
                         line_range,
                         true,
                         ctx.supports_keyboard_enhancement,
+                        ctx.panel_width.saturating_sub(1),
                     );
                     let box_top_row = line_idx;
                     let box_end = line_idx + input_lines.len().saturating_sub(1);
-                    let annotations_replaced = 2 + comment.content.split('\n').count();
+                    let annotations_replaced = App::comment_display_lines(comment, ctx.panel_width);
                     cursor_info_out = Some((
                         line_idx + cursor_info.line_offset,
                         1 + cursor_info.column,
@@ -1317,6 +1327,7 @@ fn add_comments_to_line(
                         comment_type_presentation(ctx.app, &comment.comment_type),
                         &comment.content,
                         line_range,
+                        ctx.panel_width.saturating_sub(1),
                     );
                     let box_top_row = line_idx;
                     for mut comment_line in comment_lines {
@@ -1354,6 +1365,7 @@ fn add_comments_to_line(
             line_range,
             false,
             ctx.supports_keyboard_enhancement,
+            ctx.panel_width.saturating_sub(1),
         );
         let box_top_row = line_idx;
         let box_end = line_idx + input_lines.len().saturating_sub(1);

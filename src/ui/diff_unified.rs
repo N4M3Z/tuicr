@@ -37,6 +37,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
         .border_style(styles::border_style(&app.theme, focused));
 
     let inner = block.inner(area);
+    let comment_width = inner.width.saturating_sub(1) as usize;
     frame.render_widget(block, area);
 
     // Update viewport height for scroll calculations
@@ -93,12 +94,13 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                 None,
                 true,
                 app.supports_keyboard_enhancement,
+                comment_width,
             );
             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
             comment_cursor_column = 1 + cursor_info.column;
             comment_input_box_range =
                 Some((line_idx, line_idx + input_lines.len().saturating_sub(1)));
-            let annotations_replaced = 2 + comment.content.split('\n').count();
+            let annotations_replaced = App::comment_display_lines(comment, inner.width as usize);
             app.comment_input_annotation_offset =
                 Some((line_idx, input_lines.len(), annotations_replaced));
 
@@ -117,6 +119,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                 comment_type_presentation(app, &comment.comment_type),
                 &comment.content,
                 None,
+                comment_width,
             );
             for mut comment_line in comment_lines {
                 let indicator = cursor_indicator(line_idx, current_line_idx);
@@ -139,6 +142,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
             None,
             false,
             app.supports_keyboard_enhancement,
+            comment_width,
         );
         comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
         comment_cursor_column = 1 + cursor_info.column;
@@ -210,6 +214,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                         None,
                         true,
                         app.supports_keyboard_enhancement,
+                        comment_width,
                     );
                     // Track cursor position: logical line = current line_idx + cursor offset within input
                     comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
@@ -217,7 +222,8 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                     comment_cursor_column = 1 + cursor_info.column;
                     comment_input_box_range =
                         Some((line_idx, line_idx + input_lines.len().saturating_sub(1)));
-                    let annotations_replaced = 2 + comment.content.split('\n').count();
+                    let annotations_replaced =
+                        App::comment_display_lines(comment, inner.width as usize);
                     app.comment_input_annotation_offset =
                         Some((line_idx, input_lines.len(), annotations_replaced));
 
@@ -239,6 +245,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                         comment_type_presentation(app, &comment.comment_type),
                         &comment.content,
                         None,
+                        comment_width,
                     );
                     for mut comment_line in comment_lines {
                         let indicator = cursor_indicator(line_idx, current_line_idx);
@@ -266,6 +273,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                 None,
                 false,
                 app.supports_keyboard_enhancement,
+                comment_width,
             );
             // Track cursor position
             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
@@ -534,6 +542,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                                 line_range,
                                                 true,
                                                 app.supports_keyboard_enhancement,
+                                                comment_width,
                                             );
                                         comment_cursor_logical_line =
                                             Some(line_idx + cursor_info.line_offset);
@@ -543,8 +552,10 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                             line_idx,
                                             line_idx + input_lines.len().saturating_sub(1),
                                         ));
-                                        let annotations_replaced =
-                                            2 + comment.content.split('\n').count();
+                                        let annotations_replaced = App::comment_display_lines(
+                                            comment,
+                                            inner.width as usize,
+                                        );
                                         app.comment_input_annotation_offset = Some((
                                             line_idx,
                                             input_lines.len(),
@@ -580,6 +591,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                             comment_type_presentation(app, &comment.comment_type),
                                             &comment.content,
                                             line_range,
+                                            comment_width,
                                         );
                                         let box_top_row = line_idx;
                                         for mut comment_line in comment_lines {
@@ -634,6 +646,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                     line_range,
                                     false,
                                     app.supports_keyboard_enhancement,
+                                    comment_width,
                                 );
                             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
                             comment_cursor_column = 1 + cursor_info.column;
@@ -688,6 +701,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                                 line_range,
                                                 true,
                                                 app.supports_keyboard_enhancement,
+                                                comment_width,
                                             );
                                         comment_cursor_logical_line =
                                             Some(line_idx + cursor_info.line_offset);
@@ -697,8 +711,10 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                             line_idx,
                                             line_idx + input_lines.len().saturating_sub(1),
                                         ));
-                                        let annotations_replaced =
-                                            2 + comment.content.split('\n').count();
+                                        let annotations_replaced = App::comment_display_lines(
+                                            comment,
+                                            inner.width as usize,
+                                        );
                                         app.comment_input_annotation_offset = Some((
                                             line_idx,
                                             input_lines.len(),
@@ -734,6 +750,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                             comment_type_presentation(app, &comment.comment_type),
                                             &comment.content,
                                             line_range,
+                                            comment_width,
                                         );
                                         let box_top_row = line_idx;
                                         for mut comment_line in comment_lines {
@@ -788,6 +805,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
                                     line_range,
                                     false,
                                     app.supports_keyboard_enhancement,
+                                    comment_width,
                                 );
                             comment_cursor_logical_line = Some(line_idx + cursor_info.line_offset);
                             comment_cursor_column = 1 + cursor_info.column;
@@ -931,7 +949,7 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
 
     let max_content_width = line_widths.iter().copied().max().unwrap_or(0);
 
-    app.diff_state.viewport_width = inner.width as usize;
+    app.sync_viewport_width(inner.width as usize);
     app.diff_state.max_content_width = max_content_width;
 
     let scroll_offset = app.diff_state.scroll_offset;
