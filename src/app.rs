@@ -1050,6 +1050,13 @@ impl FileListState {
         let max_scroll_x = self.max_content_width.saturating_sub(self.viewport_width);
         self.scroll_x = (self.scroll_x.saturating_add(cols)).min(max_scroll_x);
     }
+
+    /// True when the rightmost column of the rendered file list is
+    /// already visible. The tree-nav fallthrough on `l` triggers here.
+    pub fn at_max_scroll_x(&self) -> bool {
+        let max_scroll_x = self.max_content_width.saturating_sub(self.viewport_width);
+        self.scroll_x >= max_scroll_x
+    }
 }
 
 #[derive(Debug)]
@@ -7635,6 +7642,40 @@ impl App {
         }
     }
 
+    /// Select the parent directory of the current tree selection. Returns
+    /// `true` if a parent existed and was selected; `false` at the root.
+    /// Walks up from the current item's path to the nearest visible
+    /// `Directory` entry in the rendered tree.
+    pub fn file_list_select_parent(&mut self) -> bool {
+        use std::path::Path;
+
+        let item = match self.get_selected_tree_item() {
+            Some(i) => i,
+            None => return false,
+        };
+        let child_path = match &item {
+            FileTreeItem::Directory { path, .. } => path.clone(),
+            FileTreeItem::File { file_idx, .. } => match self.diff_files.get(*file_idx) {
+                Some(file) => file.display_path().display().to_string(),
+                None => return false,
+            },
+        };
+        let parent = match Path::new(&child_path).parent() {
+            Some(p) if !p.as_os_str().is_empty() => p.to_string_lossy().to_string(),
+            _ => return false,
+        };
+        let visible = self.build_visible_items();
+        for (idx, entry) in visible.iter().enumerate() {
+            if let FileTreeItem::Directory { path, .. } = entry
+                && *path == parent
+            {
+                self.file_list_state.select(idx);
+                return true;
+            }
+        }
+        false
+    }
+
     /// Get the line boundaries (start_line, end_line) of a gap.
     fn gap_boundaries(&self, gap_id: &GapId) -> Option<(u32, u32)> {
         let file = self.diff_files.get(gap_id.file_idx)?;
@@ -13223,5 +13264,37 @@ mod single_file_view_tests {
         assert_eq!(app.effective_file_height(1, other), 0);
         let current = &app.diff_files[0].clone();
         assert!(app.effective_file_height(0, current) > 0);
+    }
+
+    #[test]
+    fn file_list_select_parent_jumps_from_file_to_containing_dir() {
+        let files = vec![file("src/a.rs", vec![hunk(1, 3)])];
+        let mut app = app_with(files);
+        app.expanded_dirs.insert("src".to_string());
+        // Visible: [Directory("src"), File("src/a.rs")] -- select the file.
+        app.file_list_state.select(1);
+        assert!(matches!(
+            app.get_selected_tree_item(),
+            Some(FileTreeItem::File { .. })
+        ));
+
+        let walked = app.file_list_select_parent();
+
+        assert!(walked);
+        assert!(matches!(
+            app.get_selected_tree_item(),
+            Some(FileTreeItem::Directory { path, .. }) if path == "src"
+        ));
+    }
+
+    #[test]
+    fn file_list_select_parent_at_root_returns_false() {
+        let files = vec![file("root.rs", vec![hunk(1, 3)])];
+        let mut app = app_with(files);
+        app.file_list_state.select(0);
+
+        let walked = app.file_list_select_parent();
+
+        assert!(!walked);
     }
 }

@@ -851,8 +851,50 @@ pub fn handle_file_list_action(app: &mut App, action: Action) {
     match action {
         Action::CursorDown(n) => app.file_list_down(n),
         Action::CursorUp(n) => app.file_list_up(n),
-        Action::ScrollLeft(n) => app.file_list_state.scroll_left(n),
-        Action::ScrollRight(n) => app.file_list_state.scroll_right(n),
+        // h/Left: scroll the file list left while there's hidden content;
+        // at the leftmost column fall through to gitui-style tree nav --
+        // collapse an expanded folder, otherwise ascend to the parent.
+        Action::ScrollLeft(n) => {
+            if app.file_list_state.scroll_x > 0 {
+                app.file_list_state.scroll_left(n);
+            } else {
+                match app.get_selected_tree_item() {
+                    Some(FileTreeItem::Directory { ref path, .. })
+                        if app.expanded_dirs.contains(path) =>
+                    {
+                        let path = path.clone();
+                        app.toggle_directory(&path);
+                    }
+                    _ => {
+                        app.file_list_select_parent();
+                    }
+                }
+            }
+        }
+        // l/Right: scroll the file list right while there's hidden content;
+        // at the rightmost column fall through to gitui-style tree nav --
+        // expand a collapsed folder, descend into an expanded one, or
+        // slide to the diff when on a file.
+        Action::ScrollRight(n) => {
+            if !app.file_list_state.at_max_scroll_x() {
+                app.file_list_state.scroll_right(n);
+            } else {
+                match app.get_selected_tree_item() {
+                    Some(FileTreeItem::Directory { ref path, .. })
+                        if !app.expanded_dirs.contains(path) =>
+                    {
+                        let path = path.clone();
+                        app.toggle_directory(&path);
+                    }
+                    Some(FileTreeItem::Directory { .. }) => {
+                        app.file_list_down(1);
+                    }
+                    _ => {
+                        app.focused_panel = FocusedPanel::Diff;
+                    }
+                }
+            }
+        }
         Action::MouseScrollDown(n) => app.file_list_viewport_scroll_down(n),
         Action::MouseScrollUp(n) => app.file_list_viewport_scroll_up(n),
         Action::SelectFile | Action::ToggleExpand => {
@@ -884,7 +926,19 @@ pub fn handle_diff_action(app: &mut App, action: Action) {
         Action::CursorUp(n) => app.cursor_up(n),
         Action::ScrollViewDown(n) => app.scroll_view_down(n),
         Action::ScrollViewUp(n) => app.scroll_view_up(n),
-        Action::ScrollLeft(n) => app.scroll_left(n),
+        Action::ScrollLeft(n) => {
+            // Slide focus back to the file list when there's nothing left
+            // to scroll horizontally. Also reveals the panel if it was
+            // hidden, so the user doesn't have to remember `<leader>e`.
+            if app.diff_state.scroll_x == 0 {
+                if !app.show_file_list {
+                    app.show_file_list = true;
+                }
+                app.focused_panel = FocusedPanel::FileList;
+            } else {
+                app.scroll_left(n);
+            }
+        }
         Action::ScrollRight(n) => app.scroll_right(n),
         Action::MouseScrollDown(n) => app.scroll_view_down(n),
         Action::MouseScrollUp(n) => app.scroll_view_up(n),
