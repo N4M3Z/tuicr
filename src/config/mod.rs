@@ -53,6 +53,10 @@ pub struct AppConfig {
     pub transparent_background: Option<bool>,
     pub scroll_offset: Option<usize>,
     pub no_update_check: Option<bool>,
+    /// When true, every session opens in single-file view (`:focus`).
+    /// Pristine `--all-files` mode already defaults to true regardless
+    /// of this setting. Defaults to false.
+    pub single_file_view: Option<bool>,
     /// `[forge]` section settings. Always present; `None` means "no override"
     /// and downstream code should treat it as `ForgeConfig::default()`.
     pub forge: Option<ForgeConfig>,
@@ -76,6 +80,7 @@ const KNOWN_KEYS: &[&str] = &[
     "transparent_background",
     "scroll_offset",
     "no_update_check",
+    "single_file_view",
     "forge",
 ];
 
@@ -262,6 +267,7 @@ fn load_config_from_path(path: &Path) -> Result<ConfigLoadOutcome> {
         transparent_background: read_bool(table, "transparent_background", &mut warnings),
         scroll_offset: read_usize(table, "scroll_offset", &mut warnings),
         no_update_check: read_bool(table, "no_update_check", &mut warnings),
+        single_file_view: read_bool(table, "single_file_view", &mut warnings),
         forge: table
             .get("forge")
             .and_then(|v| parse_forge(v, &mut warnings)),

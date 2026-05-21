@@ -147,6 +147,40 @@ pub fn render_help(frame: &mut Frame, app: &mut App) {
             ),
             Span::raw("Toggle file list visibility"),
         ]),
+        Line::from(vec![
+            Span::styled(
+                format!("  {}f        ", app.leader_key),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Toggle single-file view (also `:focus` / `:f`)"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "  h/l       ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Scroll diff left/right (or ←/→)"),
+        ]),
+        Line::from(vec![
+            Span::styled("  h/← at 0 ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw("Reveal + focus file list"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "  l/→ in list",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Hide list + focus diff"),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("Single-file view (`:focus`, `:f`, {}f)", app.leader_key),
+            Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        )),
+        Line::from(""),
+        Line::from(Span::raw(
+            "  One file at a time. j/k walks across files, ]/[ walks across hunks. Default in `--all-files`.",
+        )),
         Line::from(""),
         Line::from(Span::styled(
             "Commit Selector (multi-commit reviews)",
@@ -511,6 +545,16 @@ pub fn render_help(frame: &mut Frame, app: &mut App) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::raw("Toggle unified/side-by-side diff view"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "  :focus    ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!(
+                "Toggle single-file view (alias `:f`, {}f)",
+                app.leader_key
+            )),
         ]),
         Line::from(vec![
             Span::styled(

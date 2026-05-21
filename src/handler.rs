@@ -450,6 +450,7 @@ pub fn handle_command_action(app: &mut App, action: Action) {
                     app.set_message(format!("Commit selector: {status}"));
                 }
                 "diff" => app.toggle_diff_view_mode(),
+                "focus" | "f" => app.toggle_single_file_view(),
                 "stage" => app.stage_reviewed_files(),
                 "commits" | "targets" => {
                     if let Err(e) = app.enter_target_selector(TargetTab::Local) {

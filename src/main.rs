@@ -270,9 +270,17 @@ fn main() -> anyhow::Result<()> {
     // Enable keyboard enhancement for better modifier key detection (e.g., Alt+Enter)
     // This is supported by modern terminals like Kitty, iTerm2, WezTerm, etc.
     if keyboard_enhancement_supported {
+        // REPORT_EVENT_TYPES distinguishes Press from Repeat from Release so
+        // the two-press file walk (j/k at file boundary) can require an
+        // actual key release between the two presses. Without it terminals
+        // emit Press for every auto-repeat tick and held-j would walk past
+        // file boundaries.
         let _ = execute!(
             tty_output,
-            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            PushKeyboardEnhancementFlags(
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES,
+            )
         );
     }
     let backend = CrosstermBackend::new(tty_output);
@@ -291,6 +299,12 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some(wrap) = cfg.wrap {
             app.diff_state.wrap_lines = wrap;
+        }
+        // Open in single-file view when the user opts in. Pristine
+        // `--all-files` already turned it on inside `App::new`, so we
+        // only toggle if it's still off.
+        if cfg.single_file_view == Some(true) && !app.is_single_file_view {
+            app.toggle_single_file_view();
         }
         if cfg.export_legend == Some(false) {
             app.export_legend = false;
@@ -368,8 +382,33 @@ fn main() -> anyhow::Result<()> {
         // Handle events
         if event::poll(Duration::from_millis(100))? {
             let event = event::read()?;
+            // Down/Up Release flips the `*_released_since_arm` flag so the
+            // primed two-press file walk in single-file view requires a
+            // deliberate release + press; held-key auto-repeat (Repeat
+            // events) never satisfies the gate. Terminals without kitty
+            // REPORT_EVENT_TYPES support never emit Release, in which case
+            // `supports_keyboard_enhancement` is false and `cursor_down` /
+            // `cursor_up` skip the gate entirely.
+            if let Event::Key(key) = &event
+                && key.kind == KeyEventKind::Release
+            {
+                if matches!(
+                    key.code,
+                    crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j')
+                ) {
+                    app.down_released_since_arm = true;
+                }
+                if matches!(
+                    key.code,
+                    crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k')
+                ) {
+                    app.up_released_since_arm = true;
+                }
+            }
             match event {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                Event::Key(key)
+                    if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                {
                     // Handle Ctrl+C twice to exit (works across all input modes)
                     // In Comment mode, first Ctrl+C also cancels the comment
                     if key.code == crossterm::event::KeyCode::Char('c')
@@ -493,6 +532,10 @@ fn main() -> anyhow::Result<()> {
                             }
                             crossterm::event::KeyCode::Char('c') => {
                                 app.enter_review_comment_mode();
+                                continue;
+                            }
+                            crossterm::event::KeyCode::Char('f') => {
+                                app.toggle_single_file_view();
                                 continue;
                             }
                             _ => {}

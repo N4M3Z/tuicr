@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::Style,
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
@@ -69,19 +69,24 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
     let is_review_comment_mode =
         app.input_mode == InputMode::Comment && app.comment_is_review_level;
 
-    let general_indicator = cursor_indicator_spaced(line_idx, current_line_idx);
-    lines.push(Line::from(vec![
-        Span::styled(
-            general_indicator,
-            styles::current_line_indicator_style(&app.theme),
-        ),
-        Span::styled(
-            "═══ Review Comments ",
-            styles::file_header_style(&app.theme),
-        ),
-        Span::styled("═".repeat(40), styles::file_header_style(&app.theme)),
-    ]));
-    line_idx += 1;
+    // The `═══ Review Comments ═══` label is redundant in single-file
+    // view (review-level comments are still rendered below; they just
+    // don't need a banner that confuses horizontal scroll).
+    if !app.is_single_file_view {
+        let general_indicator = cursor_indicator_spaced(line_idx, current_line_idx);
+        lines.push(Line::from(vec![
+            Span::styled(
+                general_indicator,
+                styles::current_line_indicator_style(&app.theme),
+            ),
+            Span::styled(
+                "═══ Review Comments ",
+                styles::file_header_style(&app.theme),
+            ),
+            Span::styled("═".repeat(40), styles::file_header_style(&app.theme)),
+        ]));
+        line_idx += 1;
+    }
 
     for comment in &app.session.review_comments {
         let is_being_edited =
@@ -163,35 +168,57 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
     }
 
     for (file_idx, file) in app.diff_files.iter().enumerate() {
+        // Single-file view hides every file except the one the cursor is
+        // currently on. Navigation (`}`/`{`, file list) flips
+        // `current_file_idx` and the next render shows the new file.
+        if app.is_single_file_view && file_idx != app.diff_state.current_file_idx {
+            continue;
+        }
         let path = file.display_path();
         let status = file.status.as_char();
         let is_reviewed = app.session.is_file_reviewed(path);
 
-        // File header
-        let indicator = cursor_indicator_spaced(line_idx, current_line_idx);
+        // The `═══ filename ═══` separator is redundant in single-file
+        // view: the status bar and file list already name the file, and
+        // the wide bar of `═` characters confuses horizontal scrolling.
+        if !app.is_single_file_view {
+            let indicator = cursor_indicator_spaced(line_idx, current_line_idx);
+            let review_mark = if is_reviewed { "✓ " } else { "" };
+            let header_text = if file.is_commit_message {
+                format!("═══ {}Commit Message ", review_mark)
+            } else if app.is_pristine_mode {
+                // Pristine mode reviews unchanged code; the M/A/D badge would
+                // mislead. Render the header without it.
+                format!("═══ {}{} ", review_mark, path.display())
+            } else {
+                format!("═══ {}{} [{}] ", review_mark, path.display(), status)
+            };
+            lines.push(Line::from(vec![
+                Span::styled(indicator, styles::current_line_indicator_style(&app.theme)),
+                Span::styled(header_text, styles::file_header_style(&app.theme)),
+                Span::styled("═".repeat(40), styles::file_header_style(&app.theme)),
+            ]));
+            line_idx += 1;
+        }
 
-        // Add checkmark if reviewed (using same character as file list)
-        let review_mark = if is_reviewed { "✓ " } else { "" };
-
-        let header_text = if file.is_commit_message {
-            format!("═══ {}Commit Message ", review_mark)
-        } else if app.is_pristine_mode {
-            // Pristine mode reviews unchanged code; the M/A/D badge would
-            // mislead. Render the header without it.
-            format!("═══ {}{} ", review_mark, path.display())
-        } else {
-            format!("═══ {}{} [{}] ", review_mark, path.display(), status)
-        };
-        lines.push(Line::from(vec![
-            Span::styled(indicator, styles::current_line_indicator_style(&app.theme)),
-            Span::styled(header_text, styles::file_header_style(&app.theme)),
-            Span::styled("═".repeat(40), styles::file_header_style(&app.theme)),
-        ]));
-        line_idx += 1;
-
-        // If file is reviewed, skip rendering the body (fold it away)
-        if is_reviewed {
+        // If file is reviewed (and we're in multi-file view), skip
+        // rendering the body. In single-file view the user explicitly
+        // focused this file, so show its content under a dimmed banner.
+        if is_reviewed && !app.is_single_file_view {
             continue;
+        }
+        if is_reviewed && app.is_single_file_view {
+            let indicator = cursor_indicator(line_idx, current_line_idx);
+            lines.push(Line::from(vec![
+                Span::styled(indicator, styles::current_line_indicator_style(&app.theme)),
+                Span::styled(
+                    "  Marked reviewed -- r to re-open",
+                    Style::default()
+                        .fg(app.theme.fg_secondary)
+                        .add_modifier(Modifier::DIM),
+                ),
+            ]));
+            line_idx += 1;
         }
 
         // Check if we're editing/adding a file-level comment for this file
@@ -917,12 +944,35 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
             }
         }
 
-        // Spacing between files
+        // Inter-file spacing. In single-file view, the row doubles as a
+        // hint pointing at whichever file `j` would walk into next, so
+        // the user always knows what's on the other side of the edge.
+        // Falls back to a plain blank on the last file (or in multi-file
+        // mode) where the indicator is already pulling its weight.
         let indicator = cursor_indicator(line_idx, current_line_idx);
-        lines.push(Line::from(Span::styled(
-            indicator,
-            styles::current_line_indicator_style(&app.theme),
-        )));
+        let next_hint_path = if app.is_single_file_view {
+            app.diff_files
+                .get(app.diff_state.current_file_idx + 1)
+                .map(|f| f.display_path().display().to_string())
+        } else {
+            None
+        };
+        if let Some(next_path) = next_hint_path {
+            lines.push(Line::from(vec![
+                Span::styled(indicator, styles::current_line_indicator_style(&app.theme)),
+                Span::styled(
+                    format!("  \u{2193}  {next_path}"),
+                    Style::default()
+                        .fg(app.theme.fg_secondary)
+                        .add_modifier(Modifier::DIM),
+                ),
+            ]));
+        } else {
+            lines.push(Line::from(Span::styled(
+                indicator,
+                styles::current_line_indicator_style(&app.theme),
+            )));
+        }
         line_idx += 1;
     }
 
