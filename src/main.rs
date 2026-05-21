@@ -280,10 +280,10 @@ fn main() -> anyhow::Result<()> {
     // This is supported by modern terminals like Kitty, iTerm2, WezTerm, etc.
     if keyboard_enhancement_supported {
         // REPORT_EVENT_TYPES distinguishes Press from Repeat from Release so
-        // the two-press file walk (j/k at file boundary) can require an
-        // actual key release between the two presses. Without it terminals
-        // emit Press for every auto-repeat tick and held-j would walk past
-        // file boundaries.
+        // gestures that require a deliberate key release (two-press file
+        // walk in single-file view, file-list hide gesture) can gate on
+        // it. Without it terminals emit Press for every auto-repeat tick
+        // and held keys would trigger across-file walks or hides.
         let _ = execute!(
             tty_output,
             PushKeyboardEnhancementFlags(
@@ -308,6 +308,9 @@ fn main() -> anyhow::Result<()> {
         }
         if let Some(wrap) = cfg.wrap {
             app.diff_state.wrap_lines = wrap;
+        }
+        if let Some(hide) = cfg.right_arrow_hides_file_list {
+            app.right_arrow_hides_file_list = hide;
         }
         // Open in single-file view when the user opts in. Pristine
         // `--all-files` already turned it on inside `App::new`, so we
@@ -391,13 +394,13 @@ fn main() -> anyhow::Result<()> {
         // Handle events
         if event::poll(Duration::from_millis(100))? {
             let event = event::read()?;
-            // Down/Up Release flips the `*_released_since_arm` flag so the
-            // primed two-press file walk in single-file view requires a
-            // deliberate release + press; held-key auto-repeat (Repeat
-            // events) never satisfies the gate. Terminals without kitty
-            // REPORT_EVENT_TYPES support never emit Release, in which case
-            // `supports_keyboard_enhancement` is false and `cursor_down` /
-            // `cursor_up` skip the gate entirely.
+            // Key Release flips the appropriate `*_released_since_arm`
+            // flag so gestures that need a deliberate release-then-press
+            // (two-press file walk, file-list hide) can gate on it. Held
+            // keys auto-repeat (Repeat events) without releasing, so the
+            // gate never trips. Terminals without kitty REPORT_EVENT_TYPES
+            // never emit Release; `supports_keyboard_enhancement` is the
+            // bypass for that case.
             if let Event::Key(key) = &event
                 && key.kind == KeyEventKind::Release
             {
@@ -412,6 +415,13 @@ fn main() -> anyhow::Result<()> {
                     crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k')
                 ) {
                     app.up_released_since_arm = true;
+                }
+                if matches!(
+                    key.code,
+                    crossterm::event::KeyCode::Right | crossterm::event::KeyCode::Char('l')
+                ) && app.pending_hide_file_list
+                {
+                    app.right_released_since_arm = true;
                 }
             }
             match event {

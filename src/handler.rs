@@ -866,6 +866,10 @@ pub fn handle_visual_action(app: &mut App, action: Action) {
 
 /// Handle actions when file list panel is focused
 pub fn handle_file_list_action(app: &mut App, action: Action) {
+    // Any action other than Right resets the pending-hide flag.
+    if !matches!(action, Action::ScrollRight(_)) {
+        app.pending_hide_file_list = false;
+    }
     match action {
         Action::CursorDown(n) => app.file_list_down(n),
         Action::CursorUp(n) => app.file_list_up(n),
@@ -892,7 +896,8 @@ pub fn handle_file_list_action(app: &mut App, action: Action) {
         // l/Right: scroll the file list right while there's hidden content;
         // at the rightmost column fall through to gitui-style tree nav --
         // expand a collapsed folder, descend into an expanded one, or
-        // slide to the diff when on a file.
+        // slide to the diff when on a file. On slide, the optional hide
+        // gesture (`right_arrow_hides_file_list = true`) is also armed.
         Action::ScrollRight(n) => {
             if !app.file_list_state.at_max_scroll_x() {
                 app.file_list_state.scroll_right(n);
@@ -909,6 +914,10 @@ pub fn handle_file_list_action(app: &mut App, action: Action) {
                     }
                     _ => {
                         app.focused_panel = FocusedPanel::Diff;
+                        if app.right_arrow_hides_file_list {
+                            app.pending_hide_file_list = true;
+                            app.right_released_since_arm = false;
+                        }
                     }
                 }
             }
@@ -939,6 +948,11 @@ pub fn handle_file_list_action(app: &mut App, action: Action) {
 
 /// Handle actions when diff panel is focused
 pub fn handle_diff_action(app: &mut App, action: Action) {
+    // Any action other than Right resets the pending-hide arming.
+    if !matches!(action, Action::ScrollRight(_)) {
+        app.pending_hide_file_list = false;
+        app.right_released_since_arm = false;
+    }
     match action {
         Action::CursorDown(n) => app.cursor_down(n),
         Action::CursorUp(n) => app.cursor_up(n),
@@ -957,7 +971,22 @@ pub fn handle_diff_action(app: &mut App, action: Action) {
                 app.scroll_left(n);
             }
         }
-        Action::ScrollRight(n) => app.scroll_right(n),
+        Action::ScrollRight(n) => {
+            // Hide the file list only when the gesture is fully armed:
+            // a Right Press in the file list, a Release of that Right,
+            // and now a fresh Press in the diff. Held key never fires
+            // because Repeat events don't set `right_released_since_arm`.
+            if app.right_arrow_hides_file_list
+                && app.pending_hide_file_list
+                && app.right_released_since_arm
+            {
+                app.show_file_list = false;
+                app.pending_hide_file_list = false;
+                app.right_released_since_arm = false;
+            } else {
+                app.scroll_right(n);
+            }
+        }
         Action::MouseScrollDown(n) => app.scroll_view_down(n),
         Action::MouseScrollUp(n) => app.scroll_view_up(n),
         Action::SelectFile => {

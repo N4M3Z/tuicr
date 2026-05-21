@@ -947,6 +947,21 @@ pub struct App {
     /// Symmetric inverse of [`down_released_since_arm`] for the prev-file
     /// walk gate.
     pub up_released_since_arm: bool,
+    /// Set when Right in the file list moves focus to the diff. A
+    /// subsequent key release is required to arm the hide (see
+    /// `right_released_since_arm`), and then a second Right Press in
+    /// the diff consumes it. Cleared by any other action.
+    pub pending_hide_file_list: bool,
+    /// Set when the Right key is released after `pending_hide_file_list`
+    /// was armed. Required to consume the pending hide on the next Right
+    /// Press so a held key (Press, Repeat, Repeat, ...) cannot fire it.
+    /// Only meaningful on terminals that support kitty
+    /// `REPORT_EVENT_TYPES`; on others no Release events ever fire and
+    /// the hide gesture is effectively disabled.
+    pub right_released_since_arm: bool,
+    /// Config flag for the `<Right><Right>` collapse gesture. Defaults
+    /// to false; users opt in via `right_arrow_hides_file_list = true`.
+    pub right_arrow_hides_file_list: bool,
     pub cursor_line_highlight: bool,
     pub leader_key: char,
     pub scroll_offset: usize,
@@ -1610,6 +1625,9 @@ impl App {
             primed_walk_prev: false,
             down_released_since_arm: false,
             up_released_since_arm: false,
+            pending_hide_file_list: false,
+            right_released_since_arm: false,
+            right_arrow_hides_file_list: false,
             cursor_line_highlight: true,
             leader_key: crate::config::DEFAULT_LEADER_KEY,
             scroll_offset: 0,

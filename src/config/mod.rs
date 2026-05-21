@@ -57,6 +57,10 @@ pub struct AppConfig {
     /// Pristine `--all-files` mode already defaults to true regardless
     /// of this setting. Defaults to false.
     pub single_file_view: Option<bool>,
+    /// When true, a second Right press (after the first slid focus to the
+    /// diff) hides the file list. Requires a key release between the two
+    /// presses, so held keys never trigger the hide. Defaults to false.
+    pub right_arrow_hides_file_list: Option<bool>,
     /// `[forge]` section settings. Always present; `None` means "no override"
     /// and downstream code should treat it as `ForgeConfig::default()`.
     pub forge: Option<ForgeConfig>,
@@ -81,6 +85,7 @@ const KNOWN_KEYS: &[&str] = &[
     "scroll_offset",
     "no_update_check",
     "single_file_view",
+    "right_arrow_hides_file_list",
     "forge",
 ];
 
@@ -268,6 +273,7 @@ fn load_config_from_path(path: &Path) -> Result<ConfigLoadOutcome> {
         scroll_offset: read_usize(table, "scroll_offset", &mut warnings),
         no_update_check: read_bool(table, "no_update_check", &mut warnings),
         single_file_view: read_bool(table, "single_file_view", &mut warnings),
+        right_arrow_hides_file_list: read_bool(table, "right_arrow_hides_file_list", &mut warnings),
         forge: table
             .get("forge")
             .and_then(|v| parse_forge(v, &mut warnings)),
