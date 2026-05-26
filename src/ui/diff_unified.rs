@@ -202,28 +202,35 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
         let status = file.status.as_char();
         let is_reviewed = app.session.is_file_reviewed(path);
 
-        // The `═══ filename ═══` separator is redundant in single-file
-        // view: the status bar and file list already name the file, and
-        // the wide bar of `═` characters confuses horizontal scrolling.
+        // File header box: ╔══╗ + ║ name ║ + ╚══╝. Drawn flush to both
+        // panel edges — no indicator gutter, since the cursor never lands
+        // on these decoration lines. Single-file view skips this entirely.
         if !app.is_single_file_view {
-            let indicator = cursor_indicator_spaced(line_idx, current_line_idx);
+            let header_style = styles::file_header_style(&app.theme);
+
+            // Top border
+            lines.push(Line::from(vec![
+                Span::styled("╔═", header_style),
+                Span::styled(crate::ui::diff_view::HEADER_RULE, header_style),
+            ]));
+            line_idx += 1;
+
+            // Filename row
             let review_mark = if is_reviewed { "✓ " } else { "" };
             let header_text = if file.is_commit_message {
-                format!("═══ {}Commit Message ", review_mark)
+                format!("║ {}Commit Message ", review_mark)
             } else if app.is_pristine_mode {
-                // Pristine mode reviews unchanged code; the M/A/D badge would
-                // mislead. Render the header without it.
-                format!("═══ {}{} ", review_mark, path.display())
+                format!("║ {}{} ", review_mark, path.display())
             } else {
-                format!("═══ {}{} [{}] ", review_mark, path.display(), status)
+                format!("║ {}{} [{}] ", review_mark, path.display(), status)
             };
+            lines.push(Line::from(vec![Span::styled(header_text, header_style)]));
+            line_idx += 1;
+
+            // Bottom border
             lines.push(Line::from(vec![
-                Span::styled(indicator, styles::current_line_indicator_style(&app.theme)),
-                Span::styled(header_text, styles::file_header_style(&app.theme)),
-                Span::styled(
-                    crate::ui::diff_view::HEADER_RULE,
-                    styles::file_header_style(&app.theme),
-                ),
+                Span::styled("╚═", header_style),
+                Span::styled(crate::ui::diff_view::HEADER_RULE, header_style),
             ]));
             line_idx += 1;
         }
