@@ -47,6 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 # Syntax highlighting
 syntect = "5.2"
 two-face = { version = "0.5", default-features = false, features = ["syntect-default-fancy"] }
+textwrap = "0.16.2"
 
 [dev-dependencies]
 tempfile = "3.24.0"
