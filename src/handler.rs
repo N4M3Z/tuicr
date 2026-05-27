@@ -32,6 +32,7 @@ const COMMAND_SPECS: &[CommandSpec] = &[
         CommandKind::Clear(ClearScope::CommentsAndReviewed),
     ),
     CommandSpec::new(&["clearc"], CommandKind::Clear(ClearScope::CommentsOnly)),
+    CommandSpec::new(&["help", "h"], CommandKind::Help),
     CommandSpec::new(&["version"], CommandKind::Version),
     CommandSpec::new(&["update"], CommandKind::Update),
     CommandSpec::new(&["set wrap"], CommandKind::SetWrap),
@@ -114,6 +115,7 @@ enum CommandKind {
     SubmitPicker,
     Submit(SubmitEvent),
     Comments(PrCommentsVisibility),
+    Help,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -569,6 +571,12 @@ fn dispatch_command(app: &mut App, kind: CommandKind) -> CommandAfterDispatch {
         CommandKind::Clear(scope) => {
             app.clear_comments(scope);
             CommandAfterDispatch::ExitCommandMode
+        }
+        CommandKind::Help => {
+            app.command_buffer.clear();
+            app.input_mode = InputMode::Help;
+            app.help_state.scroll_offset = 0;
+            CommandAfterDispatch::KeepMode
         }
         CommandKind::Version => {
             app.set_message(format!("tuicr v{}", env!("CARGO_PKG_VERSION")));
@@ -1128,8 +1136,18 @@ pub fn handle_file_list_action(app: &mut App, action: Action) {
 /// Handle actions when the comment navigator panel is focused
 pub fn handle_comment_navigator_action(app: &mut App, action: Action) {
     match action {
-        Action::CursorDown(n) => app.comment_navigator_down(n),
-        Action::CursorUp(n) => app.comment_navigator_up(n),
+        Action::CursorDown(n) => {
+            app.comment_navigator_down(n);
+            let saved_focus = app.focused_panel;
+            app.jump_to_selected_comment();
+            app.focused_panel = saved_focus;
+        }
+        Action::CursorUp(n) => {
+            app.comment_navigator_up(n);
+            let saved_focus = app.focused_panel;
+            app.jump_to_selected_comment();
+            app.focused_panel = saved_focus;
+        }
         Action::ScrollLeft(n) => app.comment_navigator_state.scroll_left(n),
         Action::ScrollRight(n) => app.comment_navigator_state.scroll_right(n),
         Action::MouseScrollDown(n) => app.comment_navigator_viewport_scroll_down(n),
@@ -1229,14 +1247,18 @@ fn handle_shared_normal_action(app: &mut App, action: Action) {
             let has_selector = app.has_inline_commit_selector();
             let has_comments = app.has_comment_navigator_items();
             app.focused_panel = match (app.focused_panel, has_selector, has_comments) {
-                (FocusedPanel::FileList, _, true) => FocusedPanel::Comments,
-                (FocusedPanel::FileList, _, false) => FocusedPanel::Diff,
-                (FocusedPanel::Comments, _, _) => FocusedPanel::Diff,
+                (FocusedPanel::FileList, _, _) => FocusedPanel::Diff,
                 (FocusedPanel::Diff, true, _) => FocusedPanel::CommitSelector,
-                (FocusedPanel::Diff, false, _) => FocusedPanel::FileList,
-                (FocusedPanel::CommitSelector, _, _) => FocusedPanel::FileList,
+                (FocusedPanel::Diff, false, true) => FocusedPanel::Comments,
+                (FocusedPanel::Diff, false, false) => FocusedPanel::FileList,
+                (FocusedPanel::CommitSelector, _, true) => FocusedPanel::Comments,
+                (FocusedPanel::CommitSelector, _, false) => FocusedPanel::FileList,
+                (FocusedPanel::Comments, _, _) => FocusedPanel::FileList,
             };
-            if app.focused_panel == FocusedPanel::FileList {
+            if matches!(
+                app.focused_panel,
+                FocusedPanel::FileList | FocusedPanel::Comments
+            ) {
                 app.show_file_list = true;
             }
         }
@@ -1244,14 +1266,18 @@ fn handle_shared_normal_action(app: &mut App, action: Action) {
             let has_selector = app.has_inline_commit_selector();
             let has_comments = app.has_comment_navigator_items();
             app.focused_panel = match (app.focused_panel, has_selector, has_comments) {
-                (FocusedPanel::FileList, true, _) => FocusedPanel::CommitSelector,
-                (FocusedPanel::FileList, false, _) => FocusedPanel::Diff,
-                (FocusedPanel::Comments, _, _) => FocusedPanel::FileList,
-                (FocusedPanel::Diff, _, true) => FocusedPanel::Comments,
-                (FocusedPanel::Diff, _, false) => FocusedPanel::FileList,
+                (FocusedPanel::FileList, _, true) => FocusedPanel::Comments,
+                (FocusedPanel::FileList, true, false) => FocusedPanel::CommitSelector,
+                (FocusedPanel::FileList, false, false) => FocusedPanel::Diff,
+                (FocusedPanel::Comments, true, _) => FocusedPanel::CommitSelector,
+                (FocusedPanel::Comments, false, _) => FocusedPanel::Diff,
+                (FocusedPanel::Diff, _, _) => FocusedPanel::FileList,
                 (FocusedPanel::CommitSelector, _, _) => FocusedPanel::Diff,
             };
-            if app.focused_panel == FocusedPanel::FileList {
+            if matches!(
+                app.focused_panel,
+                FocusedPanel::FileList | FocusedPanel::Comments
+            ) {
                 app.show_file_list = true;
             }
         }

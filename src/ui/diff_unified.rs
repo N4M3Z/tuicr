@@ -1078,23 +1078,6 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
     } else {
         inner.width as usize
     };
-    let wrap_adjusted_widths: Vec<usize> = if wrap {
-        line_widths
-            .iter()
-            .map(|w| w.saturating_sub(gutter_width))
-            .collect()
-    } else {
-        line_widths.clone()
-    };
-    app.diff_state.visible_line_count = populate_row_to_annotation(
-        &mut app.diff_row_to_annotation,
-        &wrap_adjusted_widths,
-        wrap_effective_width,
-        inner.height as usize,
-        wrap,
-        scroll_offset,
-    );
-
     let max_scroll_x = max_content_width.saturating_sub(inner.width as usize);
     if app.diff_state.scroll_x > max_scroll_x {
         app.diff_state.scroll_x = max_scroll_x;
@@ -1105,19 +1088,35 @@ pub(super) fn render_unified_diff(frame: &mut Frame, app: &mut App, area: Rect) 
 
     let scroll_x = app.diff_state.scroll_x;
     let visible_lines_unscrolled_for_bg = visible_lines_unscrolled.clone();
-    let visible_lines: Vec<Line> = if app.diff_state.wrap_lines {
-        crate::ui::word_wrap::expand_wrapped_lines(
-            visible_lines_unscrolled,
-            gutter_width,
-            inner.width as usize,
-            &app.theme,
-        )
-    } else {
-        visible_lines_unscrolled
-            .into_iter()
-            .map(|line| apply_horizontal_scroll(line, scroll_x))
-            .collect()
-    };
+    let (visible_lines, wrap_adjusted_widths): (Vec<Line>, Vec<usize>) =
+        if app.diff_state.wrap_lines {
+            let (expanded, rows_per_line) = crate::ui::word_wrap::expand_wrapped_lines(
+                visible_lines_unscrolled,
+                gutter_width,
+                inner.width as usize,
+                &app.theme,
+            );
+            let adjusted = rows_per_line
+                .iter()
+                .map(|&rows| rows * wrap_effective_width)
+                .collect();
+            (expanded, adjusted)
+        } else {
+            let widths = line_widths.clone();
+            let lines = visible_lines_unscrolled
+                .into_iter()
+                .map(|line| apply_horizontal_scroll(line, scroll_x))
+                .collect();
+            (lines, widths)
+        };
+    app.diff_state.visible_line_count = populate_row_to_annotation(
+        &mut app.diff_row_to_annotation,
+        &wrap_adjusted_widths,
+        wrap_effective_width,
+        inner.height as usize,
+        wrap,
+        scroll_offset,
+    );
 
     // Paint per-visual-row add/del backgrounds across full row width.
     paint_unified_diff_rows_with(

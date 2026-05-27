@@ -4178,18 +4178,18 @@ impl App {
     }
 
     pub fn scroll_down(&mut self, lines: usize) {
-        // For half-page/page scrolling, move both cursor and scroll
         let max_line = self.max_cursor_line();
         let max_scroll = self.max_scroll_offset();
         self.diff_state.cursor_line = (self.diff_state.cursor_line + lines).min(max_line);
+        self.skip_decoration_forward(max_line);
         self.diff_state.scroll_offset = (self.diff_state.scroll_offset + lines).min(max_scroll);
         self.ensure_cursor_visible();
         self.update_current_file_from_cursor();
     }
 
     pub fn scroll_up(&mut self, lines: usize) {
-        // For half-page/page scrolling, move both cursor and scroll
         self.diff_state.cursor_line = self.diff_state.cursor_line.saturating_sub(lines);
+        self.skip_decoration_backward();
         self.diff_state.scroll_offset = self.diff_state.scroll_offset.saturating_sub(lines);
         self.ensure_cursor_visible();
         self.update_current_file_from_cursor();
@@ -5388,6 +5388,7 @@ impl App {
             self.up_released_since_arm = false;
             self.diff_state.current_file_idx = idx;
             self.diff_state.cursor_line = self.calculate_file_scroll_offset(idx);
+            self.skip_decoration_forward(self.line_annotations.len().saturating_sub(1));
             let max_scroll = self.max_scroll_offset();
             self.diff_state.scroll_offset = self.diff_state.cursor_line.min(max_scroll);
 

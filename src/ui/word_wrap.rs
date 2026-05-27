@@ -9,18 +9,21 @@ pub(super) fn expand_wrapped_lines<'a>(
     gutter_width: usize,
     viewport_width: usize,
     theme: &Theme,
-) -> Vec<Line<'a>> {
+) -> (Vec<Line<'a>>, Vec<usize>) {
     let content_width = viewport_width.saturating_sub(gutter_width);
     if content_width == 0 {
-        return logical_lines;
+        let count = logical_lines.len();
+        return (logical_lines, vec![1; count]);
     }
 
     let mut expanded = Vec::new();
+    let mut rows_per_line = Vec::with_capacity(logical_lines.len());
 
     for line in logical_lines {
         let total_width: usize = line.spans.iter().map(|s| s.content.width()).sum();
         if total_width <= viewport_width {
             expanded.push(line);
+            rows_per_line.push(1);
             continue;
         }
 
@@ -30,33 +33,27 @@ pub(super) fn expand_wrapped_lines<'a>(
 
         if content_text_width <= content_width {
             expanded.push(line);
+            rows_per_line.push(1);
             continue;
         }
 
+        let wrapped_segments = textwrap::wrap(&content_text, content_width);
+
+        if wrapped_segments.is_empty() {
+            expanded.push(line);
+            rows_per_line.push(1);
+            continue;
+        }
+
+        rows_per_line.push(wrapped_segments.len());
+
         let mut byte_offset = 0;
-        let mut row_index = 0;
+        for (row_index, segment) in wrapped_segments.iter().enumerate() {
+            let segment_str: &str = segment.as_ref();
+            let segment_byte_len = segment_str.len();
 
-        while byte_offset < content_text.len() {
-            let row_width_limit = content_width;
-            let mut row_end_byte = byte_offset;
-            let mut row_width = 0;
-
-            for character in content_text[byte_offset..].chars() {
-                let character_width =
-                    unicode_width::UnicodeWidthChar::width(character).unwrap_or(0);
-                if row_width + character_width > row_width_limit {
-                    break;
-                }
-                row_width += character_width;
-                row_end_byte += character.len_utf8();
-            }
-
-            if row_end_byte == byte_offset && byte_offset < content_text.len() {
-                let character = content_text[byte_offset..].chars().next().unwrap();
-                row_end_byte += character.len_utf8();
-            }
-
-            let row_spans = slice_spans_by_bytes(&content_spans, byte_offset, row_end_byte);
+            let row_spans =
+                slice_spans_by_bytes(&content_spans, byte_offset, byte_offset + segment_byte_len);
 
             let row_line = if row_index == 0 {
                 let mut spans = gutter_spans.clone();
@@ -79,16 +76,16 @@ pub(super) fn expand_wrapped_lines<'a>(
             };
 
             expanded.push(row_line);
-            byte_offset = row_end_byte;
-            row_index += 1;
-        }
-
-        if row_index == 0 {
-            expanded.push(line);
+            byte_offset += segment_byte_len;
+            while byte_offset < content_text.len()
+                && content_text.as_bytes().get(byte_offset) == Some(&b' ')
+            {
+                byte_offset += 1;
+            }
         }
     }
 
-    expanded
+    (expanded, rows_per_line)
 }
 
 fn split_spans_at_width<'a>(
